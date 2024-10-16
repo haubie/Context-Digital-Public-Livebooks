@@ -1,0 +1,26 @@
+<!-- livebook:{"persist_outputs":true} -->
+
+# Explorer: 02 - Getting started
+
+```elixir
+Mix.install([{:explorer, "~> 0.9.2"}])
+```
+
+## Your first dataframe
+
+```elixir
+df = Explorer.DataFrame.new(
+  city: ["New York", "Los Angeles", "Chicago"],
+  population: [8_419_000, 3_979_000, 2_716_000]
+)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Explorer.DataFrame<
+  Polars[3 x 2]
+  city string ["New York", "Los Angeles", "Chicago"]
+  population s64 [8419000, 3979000, 2716000]
+>
+```
