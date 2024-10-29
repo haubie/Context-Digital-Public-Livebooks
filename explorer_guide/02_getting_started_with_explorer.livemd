@@ -24,3 +24,51 @@ df = Explorer.DataFrame.new(
   population s64 [8419000, 3979000, 2716000]
 >
 ```
+
+## Using an alias
+
+In Elixir, we ususually use `alias` to create an alias for a module. For example:
+
+```
+alias Explorer.DataFrame, as: DF
+```
+
+But with Explorer, its recommended to use `require` instead, like the following:
+
+```
+require Explorer.DataFrame, as: DF
+```
+
+The reason for this is that `require` will load Explorer's macro features which allow for a friendly way to query dataframes. The macros compile regular Elixir code to a form for efficient dataframes operations.
+
+More information:
+
+* Elixir's official documentation has more information about [alias vs require](https://hexdocs.pm/elixir/alias-require-and-import.html)
+* [Explorer.Query](https://hexdocs.pm/explorer/Explorer.Query.html)
+
+```elixir
+require Explorer.DataFrame, as: DF
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+Explorer.DataFrame
+```
+
+```elixir
+df = DF.new(
+  city: ["New York", "Los Angeles", "Chicago"],
+  population: [8_419_000, 3_979_000, 2_716_000]
+)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Explorer.DataFrame<
+  Polars[3 x 2]
+  city string ["New York", "Los Angeles", "Chicago"]
+  population s64 [8419000, 3979000, 2716000]
+>
+```
