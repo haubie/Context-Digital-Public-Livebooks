@@ -3,12 +3,37 @@
 # Explorer: 2 - Importing data
 
 ```elixir
-Mix.install([{:explorer, "~> 0.9.2"}, {:kino_vega_lite, "~> 0.1.11"}])
+Mix.install([
+  {:explorer, "~> 0.9.2"},
+  {:req, "~> 0.5.6"},
+  {:nx, "~> 0.9.1"},
+  {:adbc, "~> 0.6.2"},
+  :kino
+])
 ```
+
+## Overview
+
+This livebook walks through some of the main ways to import data into Explorer:
+
+* **CSV** file or other delimiter separated format
+* **Parquet** file (also Delta Lake)
+* **IPC format** (Arrow, Feather) either from a file or stream
+* **NDJSON**, which is a file of JSON objects or lists separated by new lines
+* **SQL query** directly on a database connection via Arrow Database Connectivity (ADBC)
+* **Elixir data structures** such as though a map, keyword list, Tensor, or any data structure adhering to the `Table.Reader` protocol.
+
+To help us, the following dependencies will be installed:
+
+* `:explorer` - what we are learning!
+* `:req` - a simple HTTP client, we'll use to fetch remote data and files
+* `:nx` - numerical Elixir, which we'll use to create a tensor
+* `:adbc` - for connecting to a database via ADBC
+* `:kino` - which we'll use to start our DB connection and supervise it in Livebook.
 
 ## Set the alias
 
-As mentioned in **2 - Getting Started**, yo make our code a bit more concise, we can create a shorter 'DF' alias for the Explorer.DataFrame module. `require` will load Explorer's macro features which make for a friendly way to query dataframes.
+As mentioned in **2 - Getting Started**, to make our code a bit more concise, we can create a shorter 'DF' alias for the Explorer.DataFrame module. `require` will load Explorer's macro features which make for a friendly way to query dataframes.
 
 ```elixir
 require Explorer.DataFrame, as: DF
@@ -20,13 +45,20 @@ require Explorer.DataFrame, as: DF
 Explorer.DataFrame
 ```
 
+<!-- livebook:{"branch_parent_index":1} -->
+
 ## From CSV and TSV files
 
-Let's import the Tiantic dataset from https://github.com/datasciencedojo
+Let's import the Tiantic dataset from a CSV file.
+
+### Local file import
+
+If you have a file locally, you can just provide the path and filename:
+
+<!-- livebook:{"continue_on_error":true} -->
 
 ```elixir
-titanic_dataset_csv = "https://raw.githubusercontent.com/datasciencedojo/datasets/refs/heads/master/titanic.csv"
-df = DF.from_csv!(titanic_dataset_csv)
+df = DF.from_csv!("titanic.csv")
 ```
 
 <!-- livebook:{"output":true} -->
@@ -51,68 +83,35 @@ df = DF.from_csv!(titanic_dataset_csv)
 >
 ```
 
+If you don't have a file locally the above will trigger an error. Not to worry! Explorer can fetch files remotely, such as from a HTTP endpoint or S3 bucket.
+
+Let's fetch the titantic CSV file remotely from Github:
+
 ```elixir
-DF.to_csv!(df, "titanic.csv")
+titanic_dataset_csv = "https://github.com/haubie/Context-Digital-Public-Livebooks/raw/refs/heads/main/explorer_guide/titanic.csv"
+df = DF.from_csv!(titanic_dataset_csv)
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
-:ok
-```
-
-```elixir
-DF.to_parquet!(df, "titanic.parquet")
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-:ok
-```
-
-```elixir
-DF.to_ipc!(df, "titanic.arrow")
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-:ok
-```
-
-```elixir
-DF.to_ndjson!(df, "titanic.ndjson")
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-:ok
-```
-
-```elixir
-DF.to_ipc_stream!(df, "titanic.arrows")
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-:ok
-```
-
-```elixir
-File.cwd!()
-```
-
-<!-- livebook:{"output":true} -->
-
-```
-"/Users/haubie"
-```
-
-```elixir
-
+#Explorer.DataFrame<
+  Polars[891 x 12]
+  PassengerId s64 [1, 2, 3, 4, 5, ...]
+  Survived s64 [0, 1, 1, 1, 0, ...]
+  Pclass s64 [3, 1, 3, 1, 3, ...]
+  Name string ["Braund, Mr. Owen Harris", "Cumings, Mrs. John Bradley (Florence Briggs Thayer)",
+   "Heikkinen, Miss. Laina", "Futrelle, Mrs. Jacques Heath (Lily May Peel)",
+   "Allen, Mr. William Henry", ...]
+  Sex string ["male", "female", "female", "female", "male", ...]
+  Age f64 [22.0, 38.0, 26.0, 35.0, 35.0, ...]
+  SibSp s64 [1, 1, 0, 1, 0, ...]
+  Parch s64 [0, 0, 0, 0, 0, ...]
+  Ticket string ["A/5 21171", "PC 17599", "STON/O2. 3101282", "113803", "373450", ...]
+  Fare f64 [7.25, 71.2833, 7.925, 53.1, 8.05, ...]
+  Cabin string [nil, "C85", nil, "C123", nil, ...]
+  Embarked string ["S", "C", "S", "S", "S", ...]
+>
 ```
 
 This tells us that there are 891 rows and 12 columns.
@@ -192,15 +191,17 @@ df = DF.from_csv!(titanic_dataset_csv, skip_rows: 100)
   Kantor, Mr. Sinai string ["Petranec, Miss. Matilda", "Petroff, Mr. Pastcho (\"Pentcho\")",
    "White, Mr. Richard Frasar", "Johansson, Mr. Gustaf Joel", "Gustafsson, Mr. Anders Vilhelm", ...]
   male string ["female", "male", "male", "male", "male", ...]
-  34 f64 [28.0, nil, 21.0, 33.0, 37.0, ...]
+  34.0 f64 [28.0, nil, 21.0, 33.0, 37.0, ...]
   1 s64 [0, 0, 0, 0, 2, ...]
   0_duplicated_0 s64 [0, 0, 1, 0, 0, ...]
   244367 string ["349245", "349215", "35281", "7540", "3101276", ...]
-  26 f64 [7.8958, 7.8958, 77.2875, 8.6542, 7.925, ...]
+  26.0 f64 [7.8958, 7.8958, 77.2875, 8.6542, 7.925, ...]
    string [nil, nil, "D26", nil, nil, ...]
   S string ["S", "S", "S", "S", "S", ...]
 >
 ```
+
+<!-- livebook:{"branch_parent_index":1} -->
 
 ## From Parquet
 
@@ -245,15 +246,19 @@ DF.shuffle(df) |> DF.head(1)
 ```
 #Explorer.DataFrame<
   Polars[1 x 2]
-  question string ["My dad has a rare genetic disorder that he passed down to me.  He poops his pants every hour on the hour"]
-  response string ["Needles to say I have really shitty genes"]
+  question string ["How does a penguin build their house"]
+  response string ["Igloos it together"]
 >
 ```
 
-## From JSON
+<!-- livebook:{"branch_parent_index":1} -->
+
+## From NDJSON
+
+NDJSON is a file of JSON objects or lists separated by new lines. Let's import the titanic dataset from an **.ndjson** file:
 
 ```elixir
-json_file = "https://storage.googleapis.com/tinybird-assets/datasets/guides/how-to-ingest-ndjson-data/events_100k.ndjson"
+json_file = "https://github.com/haubie/Context-Digital-Public-Livebooks/raw/refs/heads/main/explorer_guide/titanic.ndjson"
 df = DF.from_ndjson!(json_file)
 ```
 
@@ -261,51 +266,525 @@ df = DF.from_ndjson!(json_file)
 
 ```
 #Explorer.DataFrame<
-  Polars[100000 x 5]
-  date string ["2020-06-13 22:07:41", "2015-12-17 17:30:32", "2017-05-02 10:38:35",
-   "2019-06-05 12:55:52", "2016-07-03 17:57:33", ...]
-  product_id string ["67d3e582-1aaa-11eb-bdb8-acde48001122", "6bf7c3f4-1aaa-11eb-8c4f-acde48001122",
-   "6700ac76-1aaa-11eb-92f9-acde48001122", "6aab26a8-1aaa-11eb-ac17-acde48001122",
-   "62a05d18-1aaa-11eb-b7a3-acde48001122", ...]
-  user_id s64 [521963, 897297, 814508, 148376, 578997, ...]
-  event string ["remove_item_from_cart", "add_item_to_cart", "add_item_to_cart", "buy", "view", ...]
-  extra_data struct[3] [
-    %{"city" => "Albany", "price" => nil, "term" => nil},
-    %{"city" => "Columbia", "price" => nil, "term" => nil},
-    %{"city" => "Atlanta", "price" => nil, ...},
-    %{"city" => "Harrisburg", ...},
-    %{...},
-    ...
-  ]
+  Polars[891 x 12]
+  PassengerId s64 [1, 2, 3, 4, 5, ...]
+  Survived s64 [0, 1, 1, 1, 0, ...]
+  Pclass s64 [3, 1, 3, 1, 3, ...]
+  Name string ["Braund, Mr. Owen Harris", "Cumings, Mrs. John Bradley (Florence Briggs Thayer)",
+   "Heikkinen, Miss. Laina", "Futrelle, Mrs. Jacques Heath (Lily May Peel)",
+   "Allen, Mr. William Henry", ...]
+  Sex string ["male", "female", "female", "female", "male", ...]
+  Age f64 [22.0, 38.0, 26.0, 35.0, 35.0, ...]
+  SibSp s64 [1, 1, 0, 1, 0, ...]
+  Parch s64 [0, 0, 0, 0, 0, ...]
+  Ticket string ["A/5 21171", "PC 17599", "STON/O2. 3101282", "113803", "373450", ...]
+  Fare f64 [7.25, 71.2833, 7.925, 53.1, 8.05, ...]
+  Cabin string [nil, "C85", nil, "C123", nil, ...]
+  Embarked string ["S", "C", "S", "S", "S", ...]
 >
 ```
 
+<!-- livebook:{"branch_parent_index":1} -->
+
 ## From IPC
 
-```elixir
+IPC stands for **Inter-Process Communication**. It's essentially a method that allows different processes or applications to exchange data with each other.
 
+Arrow IPC comes in two flavors: a file format (like .arrow files) for storing fixed batches of data, and a streaming format (.arrows files) for continuous data streams, which is particularly useful for handling very large datasets.
+
+### .arrow
+
+File or random access format with a fixed number of record batches which usually has an **.arrow** extension.
+
+This can also be used to read [Feather v2](https://arrow.apache.org/docs/python/feather.html) files, which are represented as the Arrow IPC file format on disk.
+
+Let's load a .arrow file of the titanic dataset:
+
+```elixir
+# Arrow file
+arrow_file = "https://github.com/haubie/Context-Digital-Public-Livebooks/raw/refs/heads/main/explorer_guide/titanic.arrow"
+df = DF.from_ipc!(arrow_file)
 ```
 
 <!-- livebook:{"output":true} -->
 
 ```
 #Explorer.DataFrame<
-  Polars[0 x 0]
+  Polars[891 x 12]
+  PassengerId s64 [1, 2, 3, 4, 5, ...]
+  Survived s64 [0, 1, 1, 1, 0, ...]
+  Pclass s64 [3, 1, 3, 1, 3, ...]
+  Name string ["Braund, Mr. Owen Harris", "Cumings, Mrs. John Bradley (Florence Briggs Thayer)",
+   "Heikkinen, Miss. Laina", "Futrelle, Mrs. Jacques Heath (Lily May Peel)",
+   "Allen, Mr. William Henry", ...]
+  Sex string ["male", "female", "female", "female", "male", ...]
+  Age f64 [22.0, 38.0, 26.0, 35.0, 35.0, ...]
+  SibSp s64 [1, 1, 0, 1, 0, ...]
+  Parch s64 [0, 0, 0, 0, 0, ...]
+  Ticket string ["A/5 21171", "PC 17599", "STON/O2. 3101282", "113803", "373450", ...]
+  Fare f64 [7.25, 71.2833, 7.925, 53.1, 8.05, ...]
+  Cabin string [nil, "C85", nil, "C123", nil, ...]
+  Embarked string ["S", "C", "S", "S", "S", ...]
 >
 ```
 
-## From database
+### .arrows
+
+The streaming IPC format has an arbitrary length sequence of record batches and is usually not accessed directly as a file (but rather a stream).
+
+When it is accessed as a file, the recommended extension is **.arrows** (with a trailing 's').
+
+Let's load a .arrows file of the titanic dataset:
 
 ```elixir
+# 'Streaming' arrow file (.arrows)
+arrows_file = "https://github.com/haubie/Context-Digital-Public-Livebooks/raw/refs/heads/main/explorer_guide/titanic.arrows"
+df = DF.from_ipc_stream!(arrows_file)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Explorer.DataFrame<
+  Polars[891 x 12]
+  PassengerId s64 [1, 2, 3, 4, 5, ...]
+  Survived s64 [0, 1, 1, 1, 0, ...]
+  Pclass s64 [3, 1, 3, 1, 3, ...]
+  Name string ["Braund, Mr. Owen Harris", "Cumings, Mrs. John Bradley (Florence Briggs Thayer)",
+   "Heikkinen, Miss. Laina", "Futrelle, Mrs. Jacques Heath (Lily May Peel)",
+   "Allen, Mr. William Henry", ...]
+  Sex string ["male", "female", "female", "female", "male", ...]
+  Age f64 [22.0, 38.0, 26.0, 35.0, 35.0, ...]
+  SibSp s64 [1, 1, 0, 1, 0, ...]
+  Parch s64 [0, 0, 0, 0, 0, ...]
+  Ticket string ["A/5 21171", "PC 17599", "STON/O2. 3101282", "113803", "373450", ...]
+  Fare f64 [7.25, 71.2833, 7.925, 53.1, 8.05, ...]
+  Cabin string [nil, "C85", nil, "C123", nil, ...]
+  Embarked string ["S", "C", "S", "S", "S", ...]
+>
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## Load functions
+
+Explorer also has equivalent 'load' functions for each of the above:
+
+* load_csv!/2
+* load_parquet!/2
+* load_ndjson!/2
+* load_ipc!/2
+* load_ipc_stream!/2
+
+The load functions are useful for when the file has already been read or availble bound to an Elixir variable, such as though `File.read!`.
+
+As an example, lets load a remote copy of the titanic CSV file with **Req**, a HTTP client, and pass the response body containing the CSV data to Explorer using the `load_csv!` function:
+
+```elixir
+# Load remote file with Req
+titanic_dataset_csv = "https://github.com/haubie/Context-Digital-Public-Livebooks/raw/refs/heads/main/explorer_guide/titanic.csv"
+response = Req.get!(titanic_dataset_csv)
+```
+
+<!-- livebook:{"output":true} -->
 
 ```
 
-## From Elixir data structure
+14:55:00.466 [debug] redirecting to https://raw.githubusercontent.com/haubie/Context-Digital-Public-Livebooks/refs/heads/main/explorer_guide/titanic.csv
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%Req.Response{
+  status: 200,
+  headers: %{
+    "accept-ranges" => ["bytes"],
+    "access-control-allow-origin" => ["*"],
+    "cache-control" => ["max-age=300"],
+    "connection" => ["keep-alive"],
+    "content-security-policy" => ["default-src 'none'; style-src 'unsafe-inline'; sandbox"],
+    "content-type" => ["text/plain; charset=utf-8"],
+    "cross-origin-resource-policy" => ["cross-origin"],
+    "date" => ["Tue, 29 Oct 2024 03:55:00 GMT"],
+    "etag" => ["W/\"43206599d1756fff4ec4e64dd95f9c50e5d814984904901a3821c40a7a4277ee\""],
+    "expires" => ["Tue, 29 Oct 2024 04:00:00 GMT"],
+    "source-age" => ["0"],
+    "strict-transport-security" => ["max-age=31536000"],
+    "vary" => ["Authorization,Accept-Encoding,Origin"],
+    "via" => ["1.1 varnish"],
+    "x-cache" => ["HIT"],
+    "x-cache-hits" => ["3"],
+    "x-content-type-options" => ["nosniff"],
+    "x-fastly-request-id" => ["b934c6d5ad43e03359c46defd3c64f298cc6193c"],
+    "x-frame-options" => ["deny"],
+    "x-github-request-id" => ["5D2E:162C03:5EE374:7643CA:67203589"],
+    "x-served-by" => ["cache-mel11274-MEL"],
+    "x-timer" => ["S1730174101.567295,VS0,VE287"],
+    "x-xss-protection" => ["1; mode=block"]
+  },
+  body: "PassengerId,Survived,Pclass,Name,Sex,Age,SibSp,Parch,Ticket,Fare,Cabin,Embarked\n1,0,3,\"Braund, Mr. Owen Harris\",male,22.0,1,0,A/5 21171,7.25,,S\n2,1,1,\"Cumings, Mrs. John Bradley (Florence Briggs Thayer)\",female,38.0,1,0,PC 17599,71.2833,C85,C\n3,1,3,\"Heikkinen, Miss. Laina\",female,26.0,0,0,STON/O2. 3101282,7.925,,S\n4,1,1,\"Futrelle, Mrs. Jacques Heath (Lily May Peel)\",female,35.0,1,0,113803,53.1,C123,S\n5,0,3,\"Allen, Mr. William Henry\",male,35.0,0,0,373450,8.05,,S\n6,0,3,\"Moran, Mr. James\",male,,0,0,330877,8.4583,,Q\n7,0,1,\"McCarthy, Mr. Timothy J\",male,54.0,0,0,17463,51.8625,E46,S\n8,0,3,\"Palsson, Master. Gosta Leonard\",male,2.0,3,1,349909,21.075,,S\n9,1,3,\"Johnson, Mrs. Oscar W (Elisabeth Vilhelmina Berg)\",female,27.0,0,2,347742,11.1333,,S\n10,1,2,\"Nasser, Mrs. Nicholas (Adele Achem)\",female,14.0,1,0,237736,30.0708,,C\n11,1,3,\"Sandstrom, Miss. Marguerite Rut\",female,4.0,1,1,PP 9549,16.7,G6,S\n12,1,1,\"Bonnell, Miss. Elizabeth\",female,58.0,0,0,113783,26.55,C103,S\n13,0,3,\"Saundercock, Mr. William Henry\",male,20.0,0,0,A/5. 2151,8.05,,S\n14,0,3,\"Andersson, Mr. Anders Johan\",male,39.0,1,5,347082,31.275,,S\n15,0,3,\"Vestrom, Miss. Hulda Amanda Adolfina\",female,14.0,0,0,350406,7.8542,,S\n16,1,2,\"Hewlett, Mrs. (Mary D Kingcome) \",female,55.0,0,0,248706,16.0,,S\n17,0,3,\"Rice, Master. Eugene\",male,2.0,4,1,382652,29.125,,Q\n18,1,2,\"Williams, Mr. Charles Eugene\",male,,0,0,244373,13.0,,S\n19,0,3,\"Vander Planke, Mrs. Julius (Emelia Maria Vandemoortele)\",female,31.0,1,0,345763,18.0,,S\n20,1,3,\"Masselmani, Mrs. Fatima\",female,,0,0,2649,7.225,,C\n21,0,2,\"Fynney, Mr. Joseph J\",male,35.0,0,0,239865,26.0,,S\n22,1,2,\"Beesley, Mr. Lawrence\",male,34.0,0,0,248698,13.0,D56,S\n23,1,3,\"McGowan, Miss. Anna \"\"Annie\"\"\",female,15.0,0,0,330923,8.0292,,Q\n24,1,1,\"Sloper, Mr. William Thompson\",male,28.0,0,0,113788,35.5,A6,S\n25,0,3,\"Palsson, Miss. Torborg Danira\",female,8.0,3,1,349909,21.075,,S\n26,1,3,\"Asplund, Mrs. Carl Oscar (Selma Augusta Emilia Johansson)\",female,38.0,1,5,347077,31.3875,,S\n27,0,3,\"Emir, Mr. Farred Chehab\",male,,0,0,2631,7.225,,C\n28,0,1,\"Fortune, Mr. Charles Alexander\",male,19.0,3,2,19950,263.0,C23 C25 C27,S\n29,1,3,\"O'Dwyer, Miss. Ellen \"\"Nellie\"\"\",female,,0,0,330959,7.8792,,Q\n30,0,3,\"Todoroff, Mr. Lalio\",male,,0,0,349216,7.8958,,S\n31,0,1,\"Uruchurtu, Don. Manuel E\",male,40.0,0,0,PC 17601,27.7208,,C\n32,1,1,\"Spencer, Mrs. William Augustus (Marie Eugenie)\",female,,1,0,PC 17569,146.5208,B78,C\n33,1,3,\"Glynn, Miss. Mary Agatha\",female,,0,0,335677,7.75,,Q\n34,0,2,\"Wheadon, Mr. Edward H\",male,66.0,0,0,C.A. 24579,10.5,,S\n35,0,1,\"Meyer, Mr. Edgar Joseph\",male,28.0,1,0,PC 17604,82.1708,,C\n36,0,1,\"Holverson, Mr. Alexander Oskar\",male,42.0,1,0,113789,52.0,,S\n37,1,3,\"Mamee, Mr. Hanna\",male,,0,0,2677,7.2292,,C\n38,0,3,\"Cann, Mr. Ernest Charles\",male,21.0,0,0,A./5. 2152,8.05,,S\n39,0,3,\"Vander Planke, Miss. Augusta Maria\",female,18.0,2,0,345764,18.0,,S\n40,1,3,\"Nicola-Yarred, Miss. Jamila\",female,14.0,1,0,2651,11.2417,,C\n41,0,3,\"Ahlin, Mrs. Johan (Johanna Persdotter Larsson)\",female,40.0,1,0,7546,9.475,,S\n42,0,2,\"Turpin, Mrs. William John Robert (Dorothy Ann Wonnacott)\",female,27.0,1,0,11668,21.0,,S\n43,0,3,\"Kraeff, Mr. Theodor\",male,,0,0,349253,7.8958,,C\n44,1,2,\"Laroche, Miss. Simonne Marie Anne Andree\",female,3.0,1,2,SC/Paris 2123,41.5792,,C\n45,1,3,\"Devaney, Miss. Margaret Delia\",female,19.0,0,0,330958,7.8792,,Q\n46,0,3,\"Rogers, Mr. William John\",male,,0,0,S.C./A.4. 23567,8.05,,S\n47,0,3,\"Lennon, Mr. Denis\",male,,1,0,370371,15.5,,Q\n48,1,3,\"O'Driscoll, Miss. Bridget\",female,,0,0,14311,7.75,,Q\n49,0,3,\"Samaan, Mr. Youssef\",male,,2,0,2662,21.6792,,C\n50,0,3,\"Arnold-Franchi, Mrs. Josef (Josefine Franchi)\",female,18.0,1,0,349237,17.8,,S\n51,0,3,\"Panula, Master. Juha Niilo\",male,7.0,4,1,3101295,39.6875,,S\n52,0,3,\"Nosworthy, Mr. Richard Cater\",male,21.0,0,0,A/4. 39886,7.8,,S\n53,1,1,\"Harper, Mrs. Henry Sleeper (Myna Haxtun)\",female,49.0,1,0,PC 17572,76.7292,D33,C\n54,1,2,\"Faunthorpe, Mrs. Lizzie (Elizabeth Anne Wilkinson)\",female,29.0,1,0,2926,26.0,,S\n55,0,1,\"Ostby, Mr. Engelhart Cornelius\",male,65.0,0,1,113509,61.9792,B30,C\n56,1,1,\"Woolner, Mr. Hugh\",male,,0,0,19947,35.5,C52,S\n57,1,2,\"Ru" <> ...,
+  trailers: %{},
+  private: %{}
+}
+```
+
+```elixir
+# Load the body of the fetched response into Explorer
+DF.load_csv!(response.body)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Explorer.DataFrame<
+  Polars[891 x 12]
+  PassengerId s64 [1, 2, 3, 4, 5, ...]
+  Survived s64 [0, 1, 1, 1, 0, ...]
+  Pclass s64 [3, 1, 3, 1, 3, ...]
+  Name string ["Braund, Mr. Owen Harris", "Cumings, Mrs. John Bradley (Florence Briggs Thayer)",
+   "Heikkinen, Miss. Laina", "Futrelle, Mrs. Jacques Heath (Lily May Peel)",
+   "Allen, Mr. William Henry", ...]
+  Sex string ["male", "female", "female", "female", "male", ...]
+  Age f64 [22.0, 38.0, 26.0, 35.0, 35.0, ...]
+  SibSp s64 [1, 1, 0, 1, 0, ...]
+  Parch s64 [0, 0, 0, 0, 0, ...]
+  Ticket string ["A/5 21171", "PC 17599", "STON/O2. 3101282", "113803", "373450", ...]
+  Fare f64 [7.25, 71.2833, 7.925, 53.1, 8.05, ...]
+  Cabin string [nil, "C85", nil, "C123", nil, ...]
+  Embarked string ["S", "C", "S", "S", "S", ...]
+>
+```
+
+<!-- livebook:{"continue_on_error":true} -->
+
+```elixir
+# File read the usually Elixir way
+file_name = "titanic.csv"
+file = File.read!(file_name)
+
+# Pass the read file to Explorer via the load function:
+DF.load_csv!(file)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Explorer.DataFrame<
+  Polars[891 x 12]
+  PassengerId s64 [1, 2, 3, 4, 5, ...]
+  Survived s64 [0, 1, 1, 1, 0, ...]
+  Pclass s64 [3, 1, 3, 1, 3, ...]
+  Name string ["Braund, Mr. Owen Harris", "Cumings, Mrs. John Bradley (Florence Briggs Thayer)",
+   "Heikkinen, Miss. Laina", "Futrelle, Mrs. Jacques Heath (Lily May Peel)",
+   "Allen, Mr. William Henry", ...]
+  Sex string ["male", "female", "female", "female", "male", ...]
+  Age f64 [22.0, 38.0, 26.0, 35.0, 35.0, ...]
+  SibSp s64 [1, 1, 0, 1, 0, ...]
+  Parch s64 [0, 0, 0, 0, 0, ...]
+  Ticket string ["A/5 21171", "PC 17599", "STON/O2. 3101282", "113803", "373450", ...]
+  Fare f64 [7.25, 71.2833, 7.925, 53.1, 8.05, ...]
+  Cabin string [nil, "C85", nil, "C123", nil, ...]
+  Embarked string ["S", "C", "S", "S", "S", ...]
+>
+```
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## From a database
+
+Explorer can import data from a database via [Arrow Database Connectivity connection](https://arrow.apache.org/docs/format/ADBC.html) or ADBC for short. ADBC provides a standard database interface using the Apache Arrow format.
+
+Elixir has the `Adbc` library which can be used to establish a connection. The Elixir library can also download the necessary database driver for us. At the time of writing this guide, the Elixir Adbc library [supports the following drivers](https://hexdocs.pm/adbc/0.6.2/Adbc.html#module-supported-drivers):
+
+* DuckDB
+* SQLite
+* PostgreSQL
+* Snowflake.
+
+For this example, we'll use the SQLite titanic database from:
+
+https://github.com/davidjamesknight/SQLite_databases_for_learning_data_science?tab=readme-ov-file#titanic
+
+Explorer requires an Adbc connection to the database. We can download the driver to SQLite by using the `Adbc.download_driver!(:sqlite)` command:
+
+```elixir
+Adbc.download_driver!(:sqlite)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+Assuming it downloaded `:ok`, lets:
+
+1. Download the `titanic.db` SQLite database file from github
+2. Save it locally as a temporary file
+3. Start SQLite and point it to the temporary local copy
+
+```elixir
+# 1 - Download it from github
+
+uri = "https://github.com/davidjamesknight/SQLite_databases_for_learning_data_science/raw/refs/heads/main/titanic.db"
+res = Req.get!(uri)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+
+14:53:02.995 [debug] redirecting to https://raw.githubusercontent.com/davidjamesknight/SQLite_databases_for_learning_data_science/refs/heads/main/titanic.db
+
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%Req.Response{
+  status: 200,
+  headers: %{
+    "accept-ranges" => ["bytes"],
+    "access-control-allow-origin" => ["*"],
+    "cache-control" => ["max-age=300"],
+    "connection" => ["keep-alive"],
+    "content-security-policy" => ["default-src 'none'; style-src 'unsafe-inline'; sandbox"],
+    "content-type" => ["application/octet-stream"],
+    "cross-origin-resource-policy" => ["cross-origin"],
+    "date" => ["Tue, 29 Oct 2024 03:53:03 GMT"],
+    "etag" => ["W/\"9201bd74fcfd6538129b160f535f8162599348b559a21898e735393e988263eb\""],
+    "expires" => ["Tue, 29 Oct 2024 03:58:03 GMT"],
+    "source-age" => ["213"],
+    "strict-transport-security" => ["max-age=31536000"],
+    "vary" => ["Authorization,Accept-Encoding,Origin"],
+    "via" => ["1.1 varnish"],
+    "x-cache" => ["HIT"],
+    "x-cache-hits" => ["0"],
+    "x-content-type-options" => ["nosniff"],
+    "x-fastly-request-id" => ["b6126925fd916dab6e0c5b7344034ee2862932ab"],
+    "x-frame-options" => ["deny"],
+    "x-github-request-id" => ["B466:2B02A3:361D77:431A45:67205308"],
+    "x-served-by" => ["cache-mel11274-MEL"],
+    "x-timer" => ["S1730173983.138479,VS0,VE1"],
+    "x-xss-protection" => ["1; mode=block"]
+  },
+  body: <<83, 81, 76, 105, 116, 101, 32, 102, 111, 114, 109, 97, 116, 32, 51, 0, 16, 0, 1, 1, 0, 64,
+    32, 32, 0, 0, 0, 16, 0, 0, 0, 17, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, ...>>,
+  trailers: %{},
+  private: %{}
+}
+```
+
+```elixir
+# 2 - Save it locally as a temp file
+
+dir = System.tmp_dir!()
+tmp_file = Path.join(dir, "titanic.db")
+File.write!(tmp_file, res.body)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+:ok
+```
+
+```elixir
+# 3 - Start SQLite pointing to the temp database file
+
+db = Kino.start_child!({Adbc.Database, driver: :sqlite, uri: tmp_file})
+conn = Kino.start_child!({Adbc.Connection, database: db})
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#PID<0.918.0>
+```
+
+Let's test to see if the connection works and we can query via Adbc:
+
+```elixir
+Adbc.Connection.query!(conn, "select * from Observation limit 3", [])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+%Adbc.Result{
+  num_rows: nil,
+  data: [
+    %{
+      data: [#Reference<0.226659520.2274230274.61494>],
+      name: "survived",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61495>],
+      name: "pclass",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61496>],
+      name: "age",
+      type: :f64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61497>],
+      name: "sibsp",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61498>],
+      name: "parch",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61499>],
+      name: "fare",
+      type: :f64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61500>],
+      name: "adult_male",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61501>],
+      name: "alone",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61502>],
+      name: "sex_id",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61503>],
+      name: "embarked_id",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61504>],
+      name: "class_id",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61505>],
+      name: "who_id",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61506>],
+      name: "deck_id",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61507>],
+      name: "embark_town_id",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    },
+    %{
+      data: [#Reference<0.226659520.2274230274.61508>],
+      name: "alive_id",
+      type: :s64,
+      metadata: nil,
+      __struct__: Adbc.Column,
+      nullable: true
+    }
+  ]
+}
+```
+
+Now that it done, lets import everthing from the Observations table into an Explorer dataframe:
+
+```elixir
+DF.from_query!(conn, "select * from Observation", [])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Explorer.DataFrame<
+  Polars[891 x 15]
+  survived s64 [0, 1, 1, 1, 0, ...]
+  pclass s64 [3, 1, 3, 1, 3, ...]
+  age f64 [22.0, 38.0, 26.0, 35.0, 35.0, ...]
+  sibsp s64 [1, 1, 0, 1, 0, ...]
+  parch s64 [0, 0, 0, 0, 0, ...]
+  fare f64 [7.25, 71.2833, 7.925, 53.1, 8.05, ...]
+  adult_male s64 [1, 0, 0, 0, 1, ...]
+  alone s64 [0, 0, 1, 0, 1, ...]
+  sex_id s64 [1, 0, 0, 0, 1, ...]
+  embarked_id s64 [2, 0, 2, 2, 2, ...]
+  class_id s64 [2, 0, 2, 0, 2, ...]
+  who_id s64 [1, 2, 2, 2, 1, ...]
+  deck_id s64 [-1, 2, -1, 2, -1, ...]
+  embark_town_id s64 [2, 0, 2, 2, 2, ...]
+  alive_id s64 [0, 1, 1, 1, 0, ...]
+>
+```
+
+Done! You can now construct an SQL query, and Explorer will import the data via the Adbc connection.
+
+<!-- livebook:{"branch_parent_index":1} -->
+
+## From an Elixir data structure
+
+We use `DF.new` to import an Elixir data structure into Explorer.
+
+This could be an Elixir map, keyword list, Tensor, or any data structure adhering to the Table.Reader protocol.
+
+### Map with list
 
 ```elixir
 elixir_map = %{
-  dataframes: ["Explorer", "Pandas", "", "Polars"],
-  language: ["Elixir", "Python", "", "Rust"]
+  dataframes: ["Explorer", "Pandas", "Polars"],
+  language: ["Elixir", "Python", "Rust"]
 }
 
 DF.new(elixir_map)
@@ -315,8 +794,75 @@ DF.new(elixir_map)
 
 ```
 #Explorer.DataFrame<
-  Polars[4 x 2]
-  language string ["Elixir", "Python", "", "Rust"]
-  dataframes string ["Explorer", "Pandas", "", "Polars"]
+  Polars[3 x 2]
+  language string ["Elixir", "Python", "Rust"]
+  dataframes string ["Explorer", "Pandas", "Polars"]
 >
 ```
+
+Notice how the keys of the map become the column (series) names above.
+
+### Keyword list
+
+Similarly, the keys in the keyword list will become the column names:
+
+```elixir
+elixir_keyword_list = [
+  dataframes: ["Explorer", "Pandas", "Polars"],
+  language: ["Elixir", "Python", "Rust"]
+]
+
+DF.new(elixir_keyword_list)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Explorer.DataFrame<
+  Polars[3 x 2]
+  dataframes string ["Explorer", "Pandas", "Polars"]
+  language string ["Elixir", "Python", "Rust"]
+>
+```
+
+### Tensor
+
+[Tensors](https://hexdocs.pm/nx/Nx.Tensor.html) are part of Numerical Elixir, also known as [Nx](https://hexdocs.pm/nx/intro-to-nx.html).
+
+If you are unfamiliar with the term, a tensor is like a multi-dimensional array that can store numbers. It's the fundamental building block for many machine learning and deep learning algorithms. Because they provide a concise mathematical framework, Tensors have [uses outside of machine learning](https://fly.io/phoenix-files/tensors-and-nx-are-not-just-for-machine-learning/).
+
+Let's create a simple tensor below and import it into Explorer:
+
+```elixir
+t = Nx.tensor([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Nx.Tensor<
+  s32[3][3]
+  [
+    [1, 2, 3],
+    [4, 5, 6],
+    [7, 8, 9]
+  ]
+>
+```
+
+```elixir
+df = DF.new(t)
+```
+
+<!-- livebook:{"output":true} -->
+
+```
+#Explorer.DataFrame<
+  Polars[3 x 3]
+  x1 s32 [1, 4, 7]
+  x2 s32 [2, 5, 8]
+  x3 s32 [3, 6, 9]
+>
+```
+
+Notice the column names. Each matrix column becomes a dataframe column with names x1, x2, x3, etc.
